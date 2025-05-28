@@ -75,23 +75,20 @@ class B3SumGUI:
         
         self.browse_button = ttk.Button(self.file_inner_frame, text="浏览文件", command=self.browse_file)
         self.browse_button.pack(side=tk.RIGHT, padx=(10, 0))
-        
-        # 计算按钮
+          # 计算按钮 - 使用更现代的按钮布局
         self.action_frame = ttk.Frame(self.main_frame)
         self.action_frame.pack(fill=tk.X, pady=10)
         
+        # 添加状态提示文本
+        self.status_text = ttk.Label(self.action_frame, text="", foreground=self.primary_color)
+        self.status_text.pack(side=tk.LEFT, padx=(10, 0))
+        
+        # 右侧放置计算按钮
         self.calculate_button = ttk.Button(self.action_frame, text="计算 B3sum", 
-                                          command=self.calculate_b3sum, 
-                                          style="Accent.TButton")
-        self.calculate_button.pack(side=tk.LEFT)
-          # 进度条 - 使用更现代的样式
-        self.progress_var = tk.DoubleVar()
-        self.style.configure("TProgressbar", thickness=8, background=self.primary_color)
-        self.progress_bar = ttk.Progressbar(self.action_frame, 
-                                          variable=self.progress_var, 
-                                          mode="indeterminate", 
-                                          style="TProgressbar")
-        self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10)
+                                         command=self.calculate_b3sum, 
+                                         style="Accent.TButton",
+                                         width=15)  # 固定宽度使按钮更美观
+        self.calculate_button.pack(side=tk.RIGHT)
         
         # 结果区域 - 使用更现代的样式
         self.result_frame = ttk.LabelFrame(self.main_frame, text="哈希结果")
@@ -174,10 +171,9 @@ class B3SumGUI:
         if not os.path.exists(file_path):
             messagebox.showerror("错误", "选择的文件不存在")
             return
-        
-        # 禁用按钮，启动进度条
+          # 禁用按钮，更新状态
         self.calculate_button.config(state=tk.DISABLED)
-        self.progress_bar.start()
+        self.status_text.config(text="计算中...")
         self.status_var.set("计算中...")
         
         # 在新线程中执行计算以避免UI冻结
@@ -199,13 +195,10 @@ class B3SumGUI:
                 self.root.after(0, self._update_result, f"错误: {error_msg}", False)
         except Exception as e:
             self.root.after(0, self._update_result, f"异常: {str(e)}", False)
-    
     def _update_result(self, text, success):
-        # 停止进度条
-        self.progress_bar.stop()
-        
         # 启用按钮
         self.calculate_button.config(state=tk.NORMAL)
+        self.status_text.config(text="")
         
         # 更新结果文本
         self.result_text.config(state=tk.NORMAL)
@@ -245,17 +238,22 @@ class B3SumGUI:
         # 如果结果中包含文件名（格式为"哈希值 文件名"），则只比较哈希部分
         if ' ' in calculated_hash:
             calculated_hash = calculated_hash.split()[0]
-        
         if user_hash == calculated_hash:
             self.result_text.config(state=tk.NORMAL)
             self.result_text.delete(1.0, tk.END)
-            self.result_text.insert(tk.END, f"{calculated_hash}\n\n✓ 验证成功！哈希值匹配。")
+            self.result_text.insert(tk.END, f"{calculated_hash}\n\n")
+            self.result_text.insert(tk.END, "✓ 验证成功！哈希值匹配。", "success")
+            # 配置成功标签为绿色
+            self.result_text.tag_configure("success", foreground="#4CAF50", font=self.header_font)
             self.result_text.config(state=tk.DISABLED)
             self.status_var.set("哈希值匹配")
         else:
             self.result_text.config(state=tk.NORMAL)
             self.result_text.delete(1.0, tk.END)
-            self.result_text.insert(tk.END, f"输入: {user_hash}\n计算: {calculated_hash}\n\n✗ 验证失败！哈希值不匹配。")
+            self.result_text.insert(tk.END, f"输入: {user_hash}\n计算: {calculated_hash}\n\n")
+            self.result_text.insert(tk.END, "✗ 验证失败！哈希值不匹配。", "error")
+            # 配置错误标签为红色
+            self.result_text.tag_configure("error", foreground="#F44336", font=self.header_font)
             self.result_text.config(state=tk.DISABLED)
             self.status_var.set("哈希值不匹配")
 
