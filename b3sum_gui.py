@@ -90,6 +90,36 @@ class B3SumGUI:
                                          width=15)  # 固定宽度使按钮更美观
         self.calculate_button.pack(side=tk.RIGHT)
         
+        # 哈希长度选择区域
+        self.length_frame = ttk.Frame(self.action_frame)
+        self.length_frame.pack(side=tk.LEFT, padx=(20, 0))
+        
+        # 长度提示标签
+        self.length_label = ttk.Label(self.length_frame, text="哈希值长度:")
+        self.length_label.pack(side=tk.LEFT, padx=(0, 5))
+        
+        # 长度选择下拉菜单
+        self.hash_length = tk.StringVar()
+        self.hash_length.set("完整")  # 默认显示完整哈希
+        hash_lengths = ["完整", "16位", "32位", "64位", "自定义"]
+        self.length_combobox = ttk.Combobox(self.length_frame, 
+                                          textvariable=self.hash_length,
+                                          values=hash_lengths,
+                                          width=8,
+                                          state="readonly")
+        self.length_combobox.pack(side=tk.LEFT)
+        self.length_combobox.bind("<<ComboboxSelected>>", self.on_length_changed)
+        
+        # 自定义长度输入框(初始隐藏)
+        self.custom_length = tk.StringVar()
+        self.custom_length.set("32")  # 默认值
+        self.custom_length_entry = ttk.Entry(self.length_frame, 
+                                           textvariable=self.custom_length,
+                                           width=5)
+        # 只有选择"自定义"时才显示
+        self.custom_length_entry.pack(side=tk.LEFT, padx=(5, 0))
+        self.custom_length_entry.pack_forget()  # 初始隐藏
+        
         # 结果区域 - 使用更现代的样式
         self.result_frame = ttk.LabelFrame(self.main_frame, text="哈希结果")
         self.result_frame.pack(fill=tk.BOTH, expand=True, pady=5)
@@ -256,6 +286,13 @@ class B3SumGUI:
             self.result_text.tag_configure("error", foreground="#F44336", font=self.header_font)
             self.result_text.config(state=tk.DISABLED)
             self.status_var.set("哈希值不匹配")
+    
+    def on_length_changed(self, event):
+        selected_length = self.hash_length.get()
+        if selected_length == "自定义":
+            self.custom_length_entry.pack(side=tk.LEFT, padx=(5, 0))
+        else:
+            self.custom_length_entry.pack_forget()
 
 if __name__ == "__main__":
     root = tk.Tk()
