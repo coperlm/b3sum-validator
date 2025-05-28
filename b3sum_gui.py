@@ -1,0 +1,265 @@
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+import subprocess
+import os
+import threading
+import pyperclip
+from tkinter.font import Font
+import sys
+import platform
+
+class B3SumGUI:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("B3sum 验证工具")
+        self.root.geometry("700x500")
+        self.root.resizable(True, True)
+        
+        # 设置窗口图标（如果在Windows上）
+        if platform.system() == "Windows":
+            try:
+                self.root.iconbitmap(default="")  # 如果有图标文件，可以放在这里
+            except:
+                pass
+                
+        # 创建自定义字体
+        self.header_font = Font(family="Segoe UI" if platform.system() == "Windows" else "Helvetica", 
+                               size=11, weight="bold")
+        self.normal_font = Font(family="Segoe UI" if platform.system() == "Windows" else "Helvetica", 
+                               size=10)
+        self.mono_font = Font(family="Consolas" if platform.system() == "Windows" else "Courier", 
+                             size=10)
+                
+        # 设置主题颜色
+        self.primary_color = "#2196f3"  # 蓝色
+        self.accent_color = "#ff9800"   # 橙色
+        self.bg_color = "#f5f5f5"       # 浅灰色背景
+        self.text_color = "#212121"     # 深灰色文本
+        
+        # 设置界面样式
+        self.style = ttk.Style()
+        self.style.configure("TButton", padding=6, relief="flat", font=self.normal_font)
+        self.style.configure("Accent.TButton", background=self.accent_color)
+        self.style.configure("TLabel", padding=5, font=self.normal_font)
+        self.style.configure("Header.TLabel", font=self.header_font)
+        self.style.configure("TFrame", padding=10, background=self.bg_color)
+        self.style.configure("TLabelframe", padding=10, background=self.bg_color)
+        self.style.configure("TLabelframe.Label", font=self.header_font)
+        
+        # 设置根窗口背景色
+        self.root.configure(background=self.bg_color)
+        
+        # 创建标题
+        self.header_frame = ttk.Frame(self.root)
+        self.header_frame.pack(fill=tk.X, padx=15, pady=(15, 5))
+        
+        self.title_label = ttk.Label(self.header_frame, text="B3sum 文件哈希验证工具", 
+                                    font=Font(family="Segoe UI" if platform.system() == "Windows" else "Helvetica", 
+                                             size=14, weight="bold"))
+        self.title_label.pack(side=tk.LEFT)
+        
+        # 创建主框架
+        self.main_frame = ttk.Frame(self.root)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=10)
+        
+        # 文件选择部分 - 使用更现代的布局
+        self.file_frame = ttk.LabelFrame(self.main_frame, text="文件选择")
+        self.file_frame.pack(fill=tk.X, pady=10, padx=5)
+        
+        self.file_inner_frame = ttk.Frame(self.file_frame)
+        self.file_inner_frame.pack(fill=tk.X, padx=5, pady=10)
+        
+        self.file_path = tk.StringVar()
+        self.file_entry = ttk.Entry(self.file_inner_frame, textvariable=self.file_path, width=50, font=self.normal_font)
+        self.file_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        self.browse_button = ttk.Button(self.file_inner_frame, text="浏览文件", command=self.browse_file)
+        self.browse_button.pack(side=tk.RIGHT, padx=(10, 0))
+        
+        # 计算按钮
+        self.action_frame = ttk.Frame(self.main_frame)
+        self.action_frame.pack(fill=tk.X, pady=10)
+        
+        self.calculate_button = ttk.Button(self.action_frame, text="计算 B3sum", 
+                                          command=self.calculate_b3sum, 
+                                          style="Accent.TButton")
+        self.calculate_button.pack(side=tk.LEFT)
+          # 进度条 - 使用更现代的样式
+        self.progress_var = tk.DoubleVar()
+        self.style.configure("TProgressbar", thickness=8, background=self.primary_color)
+        self.progress_bar = ttk.Progressbar(self.action_frame, 
+                                          variable=self.progress_var, 
+                                          mode="indeterminate", 
+                                          style="TProgressbar")
+        self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=10)
+        
+        # 结果区域 - 使用更现代的样式
+        self.result_frame = ttk.LabelFrame(self.main_frame, text="哈希结果")
+        self.result_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        
+        # 添加结果文本框和滚动条
+        self.result_text_frame = ttk.Frame(self.result_frame)
+        self.result_text_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.result_scrollbar = ttk.Scrollbar(self.result_text_frame)
+        self.result_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.result_text = tk.Text(self.result_text_frame, 
+                                 height=5, 
+                                 width=50, 
+                                 wrap=tk.WORD, 
+                                 font=self.mono_font,
+                                 yscrollcommand=self.result_scrollbar.set,
+                                 bg="#ffffff",
+                                 fg=self.text_color,
+                                 selectbackground=self.primary_color,
+                                 padx=10,
+                                 pady=10,
+                                 relief="flat",
+                                 borderwidth=1)
+        self.result_text.pack(fill=tk.BOTH, expand=True)
+        self.result_scrollbar.config(command=self.result_text.yview)
+        self.result_text.config(state=tk.DISABLED)
+        
+        # 底部按钮区域
+        self.button_frame = ttk.Frame(self.result_frame)
+        self.button_frame.pack(fill=tk.X, padx=5, pady=5)
+        
+        # 复制按钮 - 更现代的样式
+        self.copy_button = ttk.Button(self.button_frame, 
+                                     text="复制到剪贴板", 
+                                     command=self.copy_to_clipboard,
+                                     style="TButton")
+        self.copy_button.pack(side=tk.RIGHT)
+        
+        # 验证区域 - 添加一个验证哈希的区域
+        self.verify_frame = ttk.LabelFrame(self.main_frame, text="哈希验证")
+        self.verify_frame.pack(fill=tk.X, pady=(5, 10), padx=5)
+        
+        # 验证输入框架
+        self.verify_inner_frame = ttk.Frame(self.verify_frame)
+        self.verify_inner_frame.pack(fill=tk.X, padx=5, pady=10)
+        
+        # 验证标签
+        self.verify_label = ttk.Label(self.verify_inner_frame, text="输入哈希值进行验证:")
+        self.verify_label.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # 验证输入框
+        self.verify_hash = tk.StringVar()
+        self.verify_entry = ttk.Entry(self.verify_inner_frame, textvariable=self.verify_hash, width=50, font=self.mono_font)
+        self.verify_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # 验证按钮
+        self.verify_button = ttk.Button(self.verify_inner_frame, text="验证", 
+                                      command=self.verify_hash_value)
+        self.verify_button.pack(side=tk.RIGHT, padx=(10, 0))
+        
+        # 状态栏
+        self.status_var = tk.StringVar()
+        self.status_var.set("准备就绪")
+        self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+    
+    def browse_file(self):
+        file_path = filedialog.askopenfilename(title="选择文件")
+        if file_path:
+            self.file_path.set(file_path)
+            self.status_var.set(f"已选择文件: {os.path.basename(file_path)}")
+    
+    def calculate_b3sum(self):
+        file_path = self.file_path.get()
+        if not file_path:
+            messagebox.showerror("错误", "请先选择一个文件")
+            return
+        
+        if not os.path.exists(file_path):
+            messagebox.showerror("错误", "选择的文件不存在")
+            return
+        
+        # 禁用按钮，启动进度条
+        self.calculate_button.config(state=tk.DISABLED)
+        self.progress_bar.start()
+        self.status_var.set("计算中...")
+        
+        # 在新线程中执行计算以避免UI冻结
+        threading.Thread(target=self._run_b3sum, args=(file_path,), daemon=True).start()
+    def _run_b3sum(self, file_path):
+        try:
+            # 调用b3sum命令，不使用text=True，改为手动处理bytes
+            result = subprocess.run(['b3sum', file_path], capture_output=True)
+            if result.returncode == 0:
+                # 使用utf-8解码输出（通常是"哈希值 文件名"格式）
+                output = result.stdout.decode('utf-8', errors='replace').strip()
+                hash_value = output.split()[0] if ' ' in output else output
+                
+                # 更新UI (必须在主线程中)
+                self.root.after(0, self._update_result, hash_value, True)
+            else:
+                # 使用utf-8解码错误信息
+                error_msg = result.stderr.decode('utf-8', errors='replace').strip()
+                self.root.after(0, self._update_result, f"错误: {error_msg}", False)
+        except Exception as e:
+            self.root.after(0, self._update_result, f"异常: {str(e)}", False)
+    
+    def _update_result(self, text, success):
+        # 停止进度条
+        self.progress_bar.stop()
+        
+        # 启用按钮
+        self.calculate_button.config(state=tk.NORMAL)
+        
+        # 更新结果文本
+        self.result_text.config(state=tk.NORMAL)
+        self.result_text.delete(1.0, tk.END)
+        self.result_text.insert(tk.END, text)
+        self.result_text.config(state=tk.DISABLED)
+        
+        # 更新状态
+        if success:
+            self.status_var.set("计算完成")
+        else:
+            self.status_var.set("计算失败")
+    
+    def copy_to_clipboard(self):
+        result = self.result_text.get(1.0, tk.END).strip()
+        if result:
+            pyperclip.copy(result)
+            self.status_var.set("已复制到剪贴板")
+        else:
+            self.status_var.set("没有可复制的内容")
+    
+    def verify_hash_value(self):
+        # 获取用户输入的哈希值
+        user_hash = self.verify_hash.get().strip().lower()
+        
+        # 获取计算出的哈希值
+        calculated_hash = self.result_text.get(1.0, tk.END).strip().lower()
+        
+        if not user_hash:
+            messagebox.showerror("错误", "请输入要验证的哈希值")
+            return
+            
+        if not calculated_hash:
+            messagebox.showerror("错误", "请先计算文件哈希值")
+            return
+        
+        # 如果结果中包含文件名（格式为"哈希值 文件名"），则只比较哈希部分
+        if ' ' in calculated_hash:
+            calculated_hash = calculated_hash.split()[0]
+        
+        if user_hash == calculated_hash:
+            self.result_text.config(state=tk.NORMAL)
+            self.result_text.delete(1.0, tk.END)
+            self.result_text.insert(tk.END, f"{calculated_hash}\n\n✓ 验证成功！哈希值匹配。")
+            self.result_text.config(state=tk.DISABLED)
+            self.status_var.set("哈希值匹配")
+        else:
+            self.result_text.config(state=tk.NORMAL)
+            self.result_text.delete(1.0, tk.END)
+            self.result_text.insert(tk.END, f"输入: {user_hash}\n计算: {calculated_hash}\n\n✗ 验证失败！哈希值不匹配。")
+            self.result_text.config(state=tk.DISABLED)
+            self.status_var.set("哈希值不匹配")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = B3SumGUI(root)
+    root.mainloop()
