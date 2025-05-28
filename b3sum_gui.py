@@ -185,29 +185,31 @@ class B3SumGUI:
         self.status_var.set("准备就绪")
         self.status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-    
     def browse_file(self):
         file_path = filedialog.askopenfilename(title="选择文件")
         if file_path:
             self.file_path.set(file_path)
             self.status_var.set(f"已选择文件: {os.path.basename(file_path)}")
-    
-    def calculate_b3sum(self):
+    def calculate_b3sum(self, silent=False):
         file_path = self.file_path.get()
         if not file_path:
-            messagebox.showerror("错误", "请先选择一个文件")
+            if not silent:
+                messagebox.showerror("错误", "请先选择一个文件")
             return
         
         if not os.path.exists(file_path):
-            messagebox.showerror("错误", "选择的文件不存在")
+            if not silent:
+                messagebox.showerror("错误", "选择的文件不存在")
             return
-          # 禁用按钮，更新状态
+        
+        # 禁用按钮，更新状态
         self.calculate_button.config(state=tk.DISABLED)
         self.status_text.config(text="计算中...")
         self.status_var.set("计算中...")
         
         # 在新线程中执行计算以避免UI冻结
         threading.Thread(target=self._run_b3sum, args=(file_path,), daemon=True).start()
+        
     def _run_b3sum(self, file_path):
         try:
             # 调用b3sum命令，不使用text=True，改为手动处理bytes
@@ -217,6 +219,28 @@ class B3SumGUI:
                 output = result.stdout.decode('utf-8', errors='replace').strip()
                 hash_value = output.split()[0] if ' ' in output else output
                 
+                # 处理哈希值长度
+                selected_length = self.hash_length.get()
+                if selected_length != "完整":
+                    original_length = len(hash_value)
+                    if selected_length == "16位":
+                        hash_value = hash_value[:16]
+                    elif selected_length == "32位":
+                        hash_value = hash_value[:32]
+                    elif selected_length == "64位":
+                        hash_value = hash_value[:64]
+                    elif selected_length == "自定义":
+                        try:
+                            custom_len = int(self.custom_length.get().strip())
+                            if custom_len > 0 and custom_len <= original_length:
+                                hash_value = hash_value[:custom_len]
+                            else:
+                                # 如果自定义长度无效，添加警告信息
+                                hash_value += f"\n(注意: 自定义长度 {custom_len} 无效，需在1-{original_length}之间)"
+                        except ValueError:
+                            # 如果输入的不是数字，添加警告信息
+                            hash_value += "\n(注意: 自定义长度必须是数字)"
+                
                 # 更新UI (必须在主线程中)
                 self.root.after(0, self._update_result, hash_value, True)
             else:
@@ -225,6 +249,7 @@ class B3SumGUI:
                 self.root.after(0, self._update_result, f"错误: {error_msg}", False)
         except Exception as e:
             self.root.after(0, self._update_result, f"异常: {str(e)}", False)
+    
     def _update_result(self, text, success):
         # 启用按钮
         self.calculate_button.config(state=tk.NORMAL)
@@ -264,11 +289,18 @@ class B3SumGUI:
         if not calculated_hash:
             messagebox.showerror("错误", "请先计算文件哈希值")
             return
-        
-        # 如果结果中包含文件名（格式为"哈希值 文件名"），则只比较哈希部分
+          # 如果结果中包含文件名（格式为"哈希值 文件名"），则只比较哈希部分
         if ' ' in calculated_hash:
             calculated_hash = calculated_hash.split()[0]
-        if user_hash == calculated_hash:
+            
+        # 如果结果中包含注意事项（自定义长度错误警告），则去除
+        if "\n" in calculated_hash:
+            calculated_hash = calculated_hash.split("\n")[0]
+            
+        # 智能比较哈希值 - 处理不同长度的情况
+        # 取两个哈希值中较短的一个长度进行比较
+        min_length = min(len(user_hash), len(calculated_hash))
+        if user_hash[:min_length] == calculated_hash[:min_length]:
             self.result_text.config(state=tk.NORMAL)
             self.result_text.delete(1.0, tk.END)
             self.result_text.insert(tk.END, f"{calculated_hash}\n\n")
@@ -293,6 +325,14 @@ class B3SumGUI:
             self.custom_length_entry.pack(side=tk.LEFT, padx=(5, 0))
         else:
             self.custom_length_entry.pack_forget()
+            
+        # 如果已经有计算结果，则根据新选择的长度重新格式化显示
+        result_text = self.result_text.get(1.0, tk.END).strip()
+        if result_text and not result_text.startswith("错误:") and not result_text.startswith("异常:"):
+            # 重新计算当前文件的哈希值（如果有选定文件）
+            if self.file_path.get():
+                # 使用silent=True参数调用计算函数，避免弹出错误消息
+                self.calculate_b3sum(True)
 
 if __name__ == "__main__":
     root = tk.Tk()
